@@ -46,7 +46,7 @@ class Paddock(models.Model):
     is_public = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     is_world_paddock = models.BooleanField(default=False)
-    max_players = models.PositiveSmallIntegerField(default=20)
+    max_players = models.PositiveIntegerField(default=20)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="created_paddocks"
     )
