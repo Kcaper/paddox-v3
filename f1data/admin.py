@@ -39,8 +39,8 @@ class RaceAdmin(admin.ModelAdmin):
 
 @admin.register(RaceEntry)
 class RaceEntryAdmin(admin.ModelAdmin):
-    list_display = ["race", "driver", "constructor", "grid_position", "finish_position", "is_substitute", "substituted_for", "is_confirmed"]
-    list_editable = ["finish_position", "is_confirmed"]
+    list_display = ["race", "driver", "constructor", "grid_position", "finish_position", "is_fastest_lap", "is_substitute", "substituted_for", "is_confirmed"]
+    list_editable = ["finish_position", "is_fastest_lap", "is_confirmed"]
     list_filter = ["race", "is_substitute", "is_confirmed"]
     search_fields = ["driver__last_name"]
     autocomplete_fields = ["driver", "constructor", "substituted_for"]
