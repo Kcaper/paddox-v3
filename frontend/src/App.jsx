@@ -7,6 +7,9 @@ import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import Racely from './pages/Racely'
 import MyPaddocks from './pages/MyPaddocks'
+import PaddockDetail from './pages/PaddockDetail'
+import SeasonPredictions from './pages/SeasonPredictions'
+import Quiz from './pages/Quiz'
 
 function ComingSoon({ page }) {
   return (
@@ -42,13 +45,13 @@ function AppRoutes() {
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/racely" element={<Racely />} />
-                <Route path="/driver-predictions/:paddockId" element={<ComingSoon page="Driver Predictions" />} />
-                <Route path="/team-predictions/:paddockId" element={<ComingSoon page="Team Predictions" />} />
-                <Route path="/quiz" element={<ComingSoon page="Race Quiz" />} />
+                <Route path="/driver-predictions/:paddockId" element={<SeasonPredictions />} />
+                <Route path="/team-predictions/:paddockId" element={<SeasonPredictions />} />
+                <Route path="/quiz" element={<Quiz />} />
                 <Route path="/create-paddock" element={<ComingSoon page="Create Paddock" />} />
                 <Route path="/join-paddock" element={<ComingSoon page="Join Paddock" />} />
                 <Route path="/my-paddocks" element={<MyPaddocks />} />
-                <Route path="/paddock/:id" element={<ComingSoon page="Paddock" />} />
+                <Route path="/paddock/:id" element={<PaddockDetail />} />
                 <Route path="/leaderboard/:paddockId/:type" element={<ComingSoon page="Leaderboard" />} />
                 <Route path="/profile" element={<ComingSoon page="Profile" />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
 from f1data.models import Race, Season
-from leaderboards.models import RacelyScore
+from leaderboards.models import RacelyScore, SeasonScore
 from paddocks.models import Paddock, PaddockMembership
 
 
@@ -92,3 +92,43 @@ def racely_leaderboard_race(request, paddock_id, race_id):
         row["rank"] = rank
 
     return Response({"leaderboard": board})
+
+
+@api_view(["GET"])
+def season_leaderboard(request, paddock_id):
+    """Driver + constructor standing leaderboard for a paddock (latest scored race)."""
+    if not _assert_member(request.user, paddock_id):
+        return Response({"detail": "Not a member."}, status=403)
+
+    try:
+        paddock = Paddock.objects.get(pk=paddock_id)
+    except Paddock.DoesNotExist:
+        return Response({"detail": "Not found."}, status=404)
+
+    latest_race = (
+        Race.objects.filter(season=paddock.season, is_complete=True)
+        .order_by("-round")
+        .first()
+    )
+    if not latest_race:
+        return Response({"paddock": paddock.name, "leaderboard": []})
+
+    scores = SeasonScore.objects.filter(
+        paddock=paddock, race=latest_race
+    ).select_related("user").order_by("-driver_standing_points", "-constructor_standing_points")
+
+    board = [
+        {
+            "rank": rank,
+            "user": {"id": s.user.id, "username": s.user.username},
+            "driver_points": s.driver_standing_points,
+            "constructor_points": s.constructor_standing_points,
+            "total": s.combined,
+        }
+        for rank, s in enumerate(scores, 1)
+    ]
+    board.sort(key=lambda x: -x["total"])
+    for rank, row in enumerate(board, 1):
+        row["rank"] = rank
+
+    return Response({"paddock": paddock.name, "after_round": latest_race.round, "leaderboard": board})

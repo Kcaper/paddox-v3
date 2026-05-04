@@ -4,10 +4,12 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from f1data.models import Driver, Race, Season
-from f1data.serializers import DriverSerializer, RaceListSerializer
-from paddocks.models import Paddock, PaddockPool
+from f1data.models import Constructor, Driver, Race, Season
+from f1data.serializers import ConstructorSerializer, DriverSerializer, RaceListSerializer
+from paddocks.models import Paddock, PaddockMembership, PaddockPool
 from .models import (
+    ConstructorStandingPrediction, ConstructorStandingPredictionEntry,
+    DriverStandingPrediction, DriverStandingPredictionEntry,
     FastestLapPrediction, PolePrediction,
     RacelyPrediction, RacelyPredictionEntry,
 )
@@ -145,3 +147,122 @@ def submit_racely(request):
     return Response(RacelyPredictionSerializer(
         RacelyPrediction.objects.prefetch_related("entries__driver__constructor").get(pk=prediction.pk)
     ).data)
+
+
+# ------------------------------------------------------------------ season predictions
+
+def _check_season_deadline(paddock):
+    """Returns True if the season prediction deadline has passed."""
+    rules = paddock.rules
+    season = paddock.season
+    start_round = rules.driver_standing_start_round
+    from f1data.models import Race
+    first_race = Race.objects.filter(season=season, round=start_round).first()
+    if not first_race:
+        return False
+    session = rules.driver_standing_deadline_session
+    now = datetime.now(timezone.utc)
+    deadline = first_race.quali_at if session == "Q1" else first_race.fp1_at
+    return deadline and deadline <= now
+
+
+@api_view(["GET"])
+def season_prediction(request, paddock_id):
+    try:
+        membership = PaddockMembership.objects.get(user=request.user, paddock_id=paddock_id)
+    except PaddockMembership.DoesNotExist:
+        return Response({"detail": "Not a member."}, status=403)
+
+    paddock = membership.paddock
+    season = paddock.season
+
+    # All on-grid drivers/constructors (or paddock pool)
+    pool_driver_ids = list(PaddockPool.objects.filter(paddock=paddock, driver__isnull=False).values_list("driver_id", flat=True))
+    pool_ctor_ids = list(PaddockPool.objects.filter(paddock=paddock, constructor__isnull=False).values_list("constructor_id", flat=True))
+
+    if pool_driver_ids:
+        available_drivers = Driver.objects.filter(id__in=pool_driver_ids, is_on_grid=True).select_related("constructor")
+    else:
+        available_drivers = Driver.objects.filter(is_on_grid=True).select_related("constructor")
+
+    if pool_ctor_ids:
+        available_ctors = Constructor.objects.filter(id__in=pool_ctor_ids, is_on_grid=True)
+    else:
+        available_ctors = Constructor.objects.filter(is_on_grid=True)
+
+    driver_pred = DriverStandingPrediction.objects.filter(
+        user=request.user, paddock=paddock
+    ).prefetch_related("entries__driver__constructor").first()
+
+    ctor_pred = ConstructorStandingPrediction.objects.filter(
+        user=request.user, paddock=paddock
+    ).prefetch_related("entries__constructor").first()
+
+    deadline_passed = _check_season_deadline(paddock)
+
+    return Response({
+        "paddock_id": paddock_id,
+        "deadline_passed": deadline_passed,
+        "available_drivers": DriverSerializer(available_drivers.order_by("last_name"), many=True).data,
+        "available_constructors": ConstructorSerializer(available_ctors.order_by("name"), many=True).data,
+        "driver_prediction": [
+            {"position": e.position, "driver": DriverSerializer(e.driver).data}
+            for e in driver_pred.entries.order_by("position")
+        ] if driver_pred else [],
+        "constructor_prediction": [
+            {"position": e.position, "constructor": ConstructorSerializer(e.constructor).data}
+            for e in ctor_pred.entries.order_by("position")
+        ] if ctor_pred else [],
+    })
+
+
+@api_view(["POST"])
+def submit_driver_standing(request, paddock_id):
+    try:
+        membership = PaddockMembership.objects.get(user=request.user, paddock_id=paddock_id)
+    except PaddockMembership.DoesNotExist:
+        return Response({"detail": "Not a member."}, status=403)
+
+    paddock = membership.paddock
+    if _check_season_deadline(paddock):
+        return Response({"detail": "Season prediction deadline has passed."}, status=400)
+
+    driver_ids = request.data.get("driver_ids", [])
+    if not driver_ids:
+        return Response({"detail": "driver_ids is required."}, status=400)
+
+    pred, _ = DriverStandingPrediction.objects.update_or_create(
+        user=request.user, paddock=paddock, defaults={}
+    )
+    pred.entries.all().delete()
+    DriverStandingPredictionEntry.objects.bulk_create([
+        DriverStandingPredictionEntry(prediction=pred, driver_id=did, position=idx + 1)
+        for idx, did in enumerate(driver_ids)
+    ])
+    return Response({"detail": "Driver standing prediction saved."})
+
+
+@api_view(["POST"])
+def submit_constructor_standing(request, paddock_id):
+    try:
+        membership = PaddockMembership.objects.get(user=request.user, paddock_id=paddock_id)
+    except PaddockMembership.DoesNotExist:
+        return Response({"detail": "Not a member."}, status=403)
+
+    paddock = membership.paddock
+    if _check_season_deadline(paddock):
+        return Response({"detail": "Season prediction deadline has passed."}, status=400)
+
+    ctor_ids = request.data.get("constructor_ids", [])
+    if not ctor_ids:
+        return Response({"detail": "constructor_ids is required."}, status=400)
+
+    pred, _ = ConstructorStandingPrediction.objects.update_or_create(
+        user=request.user, paddock=paddock, defaults={}
+    )
+    pred.entries.all().delete()
+    ConstructorStandingPredictionEntry.objects.bulk_create([
+        ConstructorStandingPredictionEntry(prediction=pred, constructor_id=cid, position=idx + 1)
+        for idx, cid in enumerate(ctor_ids)
+    ])
+    return Response({"detail": "Constructor standing prediction saved."})
