@@ -8,6 +8,7 @@ export default function PaddockDetail() {
   const { user } = useAuth()
   const [paddock, setPaddock] = useState(null)
   const [leaderboard, setLeaderboard] = useState([])
+  const [seasonLeaderboard, setSeasonLeaderboard] = useState([])
   const [tab, setTab] = useState('leaderboard')
   const [loading, setLoading] = useState(true)
 
@@ -15,9 +16,11 @@ export default function PaddockDetail() {
     Promise.all([
       paddocksApi.detail(id),
       paddocksApi.leaderboard(id),
-    ]).then(([pd, lb]) => {
+      paddocksApi.seasonLeaderboard(id),
+    ]).then(([pd, lb, slb]) => {
       setPaddock(pd.data)
       setLeaderboard(lb.data.leaderboard || [])
+      setSeasonLeaderboard(slb.data.leaderboard || [])
     }).finally(() => setLoading(false))
   }, [id])
 
@@ -67,22 +70,23 @@ export default function PaddockDetail() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-white/10 mb-6">
-        {['leaderboard', 'members'].map((t) => (
+        {[['leaderboard', 'Racely'], ['season', 'Season'], ['members', 'Members']].map(([key, label]) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
-              tab === t
+            key={key}
+            onClick={() => setTab(key)}
+            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              tab === key
                 ? 'text-white border-red-500'
                 : 'text-gray-500 border-transparent hover:text-gray-300'
             }`}
           >
-            {t}
+            {label}
           </button>
         ))}
       </div>
 
       {tab === 'leaderboard' && <LeaderboardTab rows={leaderboard} />}
+      {tab === 'season' && <SeasonLeaderboardTab rows={seasonLeaderboard} />}
       {tab === 'members' && (
         <MembersTab
           paddockId={id}
@@ -112,6 +116,31 @@ function LeaderboardTab({ rows }) {
             <div className="text-sm font-medium text-white">{row.user.username}</div>
             <div className="text-xs text-gray-500">
               Pos {row.position_points}pt · Pole {row.pole_points}pt · FL {row.fastest_lap_points}pt · Quiz {row.quiz_points}pt
+            </div>
+          </div>
+          <span className="text-lg font-bold text-white">{row.total}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function SeasonLeaderboardTab({ rows }) {
+  if (rows.length === 0) {
+    return <p className="text-gray-500 text-sm">No season scores yet — standings predictions will be scored after each race.</p>
+  }
+
+  return (
+    <div className="space-y-2">
+      {rows.map((row) => (
+        <div key={row.user.id} className="flex items-center gap-4 px-5 py-3 rounded-xl border border-white/8 bg-white/4">
+          <span className={`text-sm font-bold w-6 text-center ${row.rank === 1 ? 'text-yellow-400' : row.rank === 2 ? 'text-gray-300' : row.rank === 3 ? 'text-amber-600' : 'text-gray-600'}`}>
+            {row.rank}
+          </span>
+          <div className="flex-1">
+            <div className="text-sm font-medium text-white">{row.user.username}</div>
+            <div className="text-xs text-gray-500">
+              Drivers {row.driver_points}pt · Constructors {row.constructor_points}pt
             </div>
           </div>
           <span className="text-lg font-bold text-white">{row.total}</span>
