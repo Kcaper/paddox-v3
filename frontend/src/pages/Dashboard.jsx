@@ -9,7 +9,6 @@ export default function Dashboard() {
     f1Api.races().then((r) => setRaces(r.data)).finally(() => setLoading(false))
   }, [])
 
-  const now = new Date()
   const nextRaceIndex = races.findIndex((r) => !r.is_complete)
 
   return (
@@ -37,20 +36,46 @@ export default function Dashboard() {
 }
 
 function RaceCard({ race, isNext }) {
+  const [expanded, setExpanded] = useState(false)
+  const [entries, setEntries] = useState(null)
+  const [loadingEntries, setLoadingEntries] = useState(false)
+
   const raceDate = race.race_at ? new Date(race.race_at) : null
   const qualiDate = race.quali_at ? new Date(race.quali_at) : null
+
+  const handleExpand = async () => {
+    if (!race.is_complete) return
+    if (!expanded && entries === null) {
+      setLoadingEntries(true)
+      try {
+        const r = await f1Api.race(race.id)
+        const sorted = (r.data.entries || [])
+          .filter((e) => e.finish_position)
+          .sort((a, b) => a.finish_position - b.finish_position)
+        setEntries(sorted)
+      } catch {
+        setEntries([])
+      } finally {
+        setLoadingEntries(false)
+      }
+    }
+    setExpanded((v) => !v)
+  }
 
   return (
     <div
       className={`rounded-xl border transition-colors ${
         race.is_complete
-          ? 'border-white/5 bg-white/2 opacity-60'
+          ? 'border-white/5 bg-white/2 opacity-70'
           : isNext
           ? 'border-red-500/40 bg-red-500/5'
           : 'border-white/8 bg-white/4'
       }`}
     >
-      <div className="flex items-center gap-4 px-5 py-4">
+      <div
+        className={`flex items-center gap-4 px-5 py-4 ${race.is_complete ? 'cursor-pointer hover:opacity-100' : ''}`}
+        onClick={handleExpand}
+      >
         {/* Round number */}
         <div className="w-8 text-center shrink-0">
           <span className={`text-xs font-mono font-bold ${race.is_complete ? 'text-gray-600' : 'text-gray-500'}`}>
@@ -74,29 +99,61 @@ function RaceCard({ race, isNext }) {
                 Next
               </span>
             )}
-            {race.is_complete && (
-              <span className="text-xs text-gray-600">Complete</span>
-            )}
           </div>
           <div className="text-xs text-gray-500 mt-0.5">
             {race.circuit?.name} · {race.circuit?.country}
           </div>
         </div>
 
-        {/* Dates */}
+        {/* Dates / expand hint */}
         <div className="text-right shrink-0 space-y-0.5">
-          {qualiDate && (
-            <div className="text-xs text-gray-500">
-              Q {formatDate(qualiDate)}
-            </div>
-          )}
-          {raceDate && (
-            <div className={`text-xs font-medium ${race.is_complete ? 'text-gray-600' : 'text-gray-300'}`}>
-              {formatDate(raceDate)}
-            </div>
+          {race.is_complete ? (
+            <span className="text-xs text-gray-600">{expanded ? '▲' : '▼'} results</span>
+          ) : (
+            <>
+              {qualiDate && (
+                <div className="text-xs text-gray-500">Q {formatDate(qualiDate)}</div>
+              )}
+              {raceDate && (
+                <div className="text-xs font-medium text-gray-300">{formatDate(raceDate)}</div>
+              )}
+            </>
           )}
         </div>
       </div>
+
+      {/* Expandable results */}
+      {expanded && (
+        <div className="px-5 pb-4 border-t border-white/5 pt-3">
+          {loadingEntries ? (
+            <div className="flex justify-center py-4">
+              <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : entries && entries.length > 0 ? (
+            <div className="space-y-1.5">
+              {entries.slice(0, 10).map((e) => (
+                <div key={e.driver.id} className="flex items-center gap-3 text-xs">
+                  <span className={`w-5 text-center font-bold shrink-0 ${
+                    e.finish_position === 1 ? 'text-yellow-400' :
+                    e.finish_position === 2 ? 'text-gray-300' :
+                    e.finish_position === 3 ? 'text-amber-600' :
+                    'text-gray-600'
+                  }`}>
+                    {e.finish_position}
+                  </span>
+                  <span className="text-gray-300 flex-1">
+                    {e.driver.first_name} {e.driver.last_name}
+                    {e.is_fastest_lap && <span className="ml-1.5 text-purple-400 font-medium">FL</span>}
+                  </span>
+                  <span className="text-gray-500">{e.driver.constructor?.name}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-600">No results available.</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
