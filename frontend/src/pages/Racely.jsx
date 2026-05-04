@@ -110,6 +110,7 @@ export default function Racely() {
 
   const race = state.race
   const locked = state.deadline_passed
+  const noPrediction = !state.prediction && locked
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
@@ -135,6 +136,12 @@ export default function Racely() {
           )}
         </p>
       </div>
+
+      {noPrediction && (
+        <div className="mb-6 px-4 py-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 text-sm">
+          You didn't submit a prediction before the deadline. Your last race's prediction will be rolled over for scoring.
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Ordered prediction list */}
