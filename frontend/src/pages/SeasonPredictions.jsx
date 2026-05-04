@@ -10,6 +10,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import client from '../api/client'
+import { f1Api } from '../api/f1'
 
 export default function SeasonPredictions() {
   const { paddockId } = useParams()
@@ -18,6 +19,7 @@ export default function SeasonPredictions() {
   const [state, setState] = useState(null)
   const [ordered, setOrdered] = useState([])
   const [pool, setPool] = useState([])
+  const [standings, setStandings] = useState({}) // id → current position
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
@@ -30,8 +32,12 @@ export default function SeasonPredictions() {
     : `/api/predictions/season/${paddockId}/constructors/`
 
   useEffect(() => {
-    client.get(`/api/predictions/season/${paddockId}/`).then((r) => {
-      const data = r.data
+    const standingsFetch = isDrivers ? f1Api.driverStandings() : f1Api.constructorStandings()
+    Promise.all([
+      client.get(`/api/predictions/season/${paddockId}/`),
+      standingsFetch,
+    ]).then(([predRes, standRes]) => {
+      const data = predRes.data
       setState(data)
 
       const available = isDrivers ? data.available_drivers : data.available_constructors
@@ -45,6 +51,13 @@ export default function SeasonPredictions() {
         setOrdered([])
         setPool(available)
       }
+
+      const standMap = {}
+      for (const s of (standRes.data || [])) {
+        const id = isDrivers ? s.driver?.id : s.constructor?.id
+        if (id) standMap[id] = s.position
+      }
+      setStandings(standMap)
     }).finally(() => setLoading(false))
   }, [paddockId, isDrivers])
 
@@ -163,25 +176,34 @@ export default function SeasonPredictions() {
             </h3>
             <span className="text-xs text-gray-500">{pool.length} remaining</span>
           </div>
+          {Object.keys(standings).length > 0 && (
+            <p className="text-xs text-gray-600 mb-2">P# = current championship position</p>
+          )}
           <div className="space-y-1.5 max-h-[32rem] overflow-y-auto pr-1">
-            {pool.map((item) => (
-              <button
-                key={item.id}
-                disabled={locked}
-                onClick={() => addItem(item)}
-                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg bg-white/4 hover:bg-white/8 disabled:opacity-40 border border-white/5 text-left transition-colors"
-              >
-                {isDrivers ? (
-                  <>
-                    <span className="text-xs font-mono text-gray-500 w-8 shrink-0">{item.abbreviation}</span>
-                    <span className="text-sm text-white flex-1">{item.first_name} {item.last_name}</span>
-                    <span className="text-xs text-gray-500">{item.constructor?.name}</span>
-                  </>
-                ) : (
-                  <span className="text-sm text-white">{item.name}</span>
-                )}
-              </button>
-            ))}
+            {pool.map((item) => {
+              const currentPos = standings[item.id]
+              return (
+                <button
+                  key={item.id}
+                  disabled={locked}
+                  onClick={() => addItem(item)}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg bg-white/4 hover:bg-white/8 disabled:opacity-40 border border-white/5 text-left transition-colors"
+                >
+                  {currentPos && (
+                    <span className="text-xs font-mono text-gray-600 w-5 shrink-0">P{currentPos}</span>
+                  )}
+                  {isDrivers ? (
+                    <>
+                      <span className="text-xs font-mono text-gray-500 w-8 shrink-0">{item.abbreviation}</span>
+                      <span className="text-sm text-white flex-1">{item.first_name} {item.last_name}</span>
+                      <span className="text-xs text-gray-500">{item.constructor?.name}</span>
+                    </>
+                  ) : (
+                    <span className="text-sm text-white flex-1">{item.name}</span>
+                  )}
+                </button>
+              )
+            })}
           </div>
         </div>
       </div>
