@@ -9,6 +9,7 @@ export const paddocksApi = {
   seasonLeaderboard: (paddockId) => client.get(`/api/leaderboards/${paddockId}/season/`),
   raceLeaderboard: (paddockId, raceId) => client.get(`/api/leaderboards/${paddockId}/racely/${raceId}/`),
   predictions: (paddockId) => client.get(`/api/paddocks/${paddockId}/predictions/`),
+  myScores: () => client.get('/api/leaderboards/me/'),
   updateMemberRole: (paddockId, userId, role) =>
     client.patch(`/api/paddocks/${paddockId}/members/${userId}/`, { role }),
   removeMember: (paddockId, userId) =>

@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from f1data.models import Race, Season
 from leaderboards.models import RacelyScore, SeasonScore
 from paddocks.models import Paddock, PaddockMembership
+from predictions.models import RacelyPrediction
 
 
 def _assert_member(user, paddock_id):
@@ -132,3 +133,52 @@ def season_leaderboard(request, paddock_id):
         row["rank"] = rank
 
     return Response({"paddock": paddock.name, "after_round": latest_race.round, "leaderboard": board})
+
+
+@api_view(["GET"])
+def my_scores(request):
+    """Per-race Racely score breakdown for the logged-in user across all their paddocks."""
+    season = Season.objects.filter(is_active=True).first()
+    if not season:
+        return Response({"races": []})
+
+    scores = (
+        RacelyScore.objects
+        .filter(user=request.user, paddock__season=season)
+        .select_related("race__circuit", "paddock")
+        .order_by("race__round", "paddock__name")
+    )
+
+    # Group by race
+    races_map = {}
+    for s in scores:
+        race = s.race
+        if race.id not in races_map:
+            races_map[race.id] = {
+                "id": race.id,
+                "round": race.round,
+                "name": race.name,
+                "circuit": race.circuit.name,
+                "country": race.circuit.country,
+                "paddocks": [],
+            }
+        races_map[race.id]["paddocks"].append({
+            "paddock_id": s.paddock.id,
+            "paddock_name": s.paddock.name,
+            "position_points": s.position_points,
+            "pole_points": s.pole_points,
+            "fastest_lap_points": s.fastest_lap_points,
+            "quiz_points": s.quiz_points,
+            "quiz_pending": s.quiz_pending,
+            "total": s.total,
+        })
+
+    # Attach prediction metadata (rolled over?)
+    pred_map = {
+        p.race_id: p.is_rolled_over
+        for p in RacelyPrediction.objects.filter(user=request.user, race__season=season)
+    }
+    for race_data in races_map.values():
+        race_data["is_rolled_over"] = pred_map.get(race_data["id"], False)
+
+    return Response({"races": sorted(races_map.values(), key=lambda r: r["round"])})

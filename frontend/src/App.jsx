@@ -11,6 +11,7 @@ import PaddockDetail from './pages/PaddockDetail'
 import SeasonPredictions from './pages/SeasonPredictions'
 import Quiz from './pages/Quiz'
 import Profile from './pages/Profile'
+import MyScores from './pages/MyScores'
 
 function ComingSoon({ page }) {
   return (
@@ -54,6 +55,7 @@ function AppRoutes() {
                 <Route path="/my-paddocks" element={<MyPaddocks />} />
                 <Route path="/paddock/:id" element={<PaddockDetail />} />
                 <Route path="/leaderboard/:paddockId/:type" element={<ComingSoon page="Leaderboard" />} />
+                <Route path="/my-scores" element={<MyScores />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
