@@ -82,6 +82,7 @@ class RaceEntry(models.Model):
     substituted_for = models.ForeignKey(
         Driver, null=True, blank=True, on_delete=models.SET_NULL, related_name="substituted_entries"
     )
+    is_fastest_lap = models.BooleanField(default=False)
     is_confirmed = models.BooleanField(default=False)
 
     class Meta:
