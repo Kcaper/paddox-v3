@@ -25,7 +25,7 @@ QUESTION_SCHEMA = """[
 
 
 class Command(BaseCommand):
-    help = "Generate AI quiz questions for a race using Claude"
+    help = "Generate AI quiz questions for a race using OpenAI"
 
     def add_arguments(self, parser):
         parser.add_argument("race_id", type=int)
@@ -42,6 +42,11 @@ class Command(BaseCommand):
             help="Number of questions to generate (default 5)",
         )
         parser.add_argument(
+            "--model",
+            default="gpt-4o-mini",
+            help="OpenAI model to use (default: gpt-4o-mini)",
+        )
+        parser.add_argument(
             "--dry-run",
             action="store_true",
             help="Print questions without saving to DB",
@@ -55,8 +60,8 @@ class Command(BaseCommand):
 
         batch = options["batch"]
         count = options["count"]
+        model = options["model"]
 
-        # Build context for Claude
         context = self._build_context(race, batch)
 
         prompt = (
@@ -67,33 +72,41 @@ class Command(BaseCommand):
             f"Return a JSON array of exactly {count} questions using this schema:\n{QUESTION_SCHEMA}"
         )
 
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        api_key = os.environ.get("OPENAI_API_KEY")
         if not api_key:
-            raise CommandError("ANTHROPIC_API_KEY environment variable not set")
+            raise CommandError("OPENAI_API_KEY environment variable not set")
 
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
 
-        self.stdout.write(f"Generating {count} {batch} questions for {race}…")
+        self.stdout.write(f"Generating {count} {batch} questions for {race} using {model}…")
 
-        message = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=4096,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.7,
         )
 
-        raw = message.content[0].text.strip()
+        raw = response.choices[0].message.content.strip()
 
         try:
-            questions = json.loads(raw)
+            parsed = json.loads(raw)
+            # OpenAI json_object mode wraps in an object — unwrap if needed
+            if isinstance(parsed, dict):
+                questions = next(
+                    (v for v in parsed.values() if isinstance(v, list)),
+                    None,
+                )
+                if questions is None:
+                    raise CommandError(f"Could not find question list in response: {raw}")
+            else:
+                questions = parsed
         except json.JSONDecodeError:
-            # Try extracting JSON array from response
-            start = raw.find("[")
-            end = raw.rfind("]") + 1
-            if start == -1 or end == 0:
-                raise CommandError(f"Could not parse JSON from response:\n{raw}")
-            questions = json.loads(raw[start:end])
+            raise CommandError(f"Could not parse JSON from response:\n{raw}")
 
         if not isinstance(questions, list):
             raise CommandError(f"Expected a JSON array, got: {type(questions)}")
@@ -103,13 +116,11 @@ class Command(BaseCommand):
                 self.stdout.write(f"\n--- Q{i} ---")
                 self.stdout.write(q["question_text"])
                 for opt in ("a", "b", "c", "d"):
-                    key = f"option_{opt}"
                     marker = " ✓" if q["correct_option"].upper() == opt.upper() else ""
-                    self.stdout.write(f"  {opt.upper()}. {q[key]}{marker}")
+                    self.stdout.write(f"  {opt.upper()}. {q[f'option_{opt}']}{marker}")
             self.stdout.write(self.style.SUCCESS(f"\nDry run complete — {len(questions)} questions generated"))
             return
 
-        # Check for existing questions to avoid duplicates
         existing = QuizQuestion.objects.filter(race=race, batch=batch).count()
         if existing > 0:
             self.stdout.write(
@@ -143,24 +154,25 @@ class Command(BaseCommand):
         ))
 
     def _build_context(self, race, batch):
-        lines = [f"Race: {race.name}", f"Circuit: {race.circuit.name}, {race.circuit.city}, {race.circuit.country}", f"Season: {race.season.year}", f"Round: {race.round}"]
+        lines = [
+            f"Race: {race.name}",
+            f"Circuit: {race.circuit.name}, {race.circuit.city}, {race.circuit.country}",
+            f"Season: {race.season.year}",
+            f"Round: {race.round}",
+        ]
 
-        # Current drivers on grid
         entries = RaceEntry.objects.filter(race=race, is_confirmed=True).select_related("driver", "constructor")
         if entries.exists():
             lines.append("\nGrid (qualifying order):")
             for e in sorted(entries, key=lambda x: x.grid_position or 99):
-                pos = e.grid_position or "?"
-                lines.append(f"  P{pos}: {e.driver} ({e.constructor})")
+                lines.append(f"  P{e.grid_position or '?'}: {e.driver} ({e.constructor})")
         else:
-            # Fall back to current-season on-grid drivers
             from f1data.models import Driver
             drivers = Driver.objects.filter(is_on_grid=True, is_reserve=False).select_related("constructor")
             lines.append("\nExpected drivers:")
             for d in drivers:
                 lines.append(f"  {d} ({d.constructor})")
 
-        # Championship standings
         standings = (
             DriverChampionshipStanding.objects
             .filter(race__season=race.season, race__round__lt=race.round)
