@@ -7,5 +7,6 @@ urlpatterns = [
     path("join/", views.join_paddock),
     path("<int:pk>/", views.paddock_detail),
     path("<int:pk>/members/<int:user_id>/", views.manage_member),
+    path("<int:pk>/leave/", views.leave_paddock),
     path("<int:pk>/predictions/", views.paddock_predictions),
 ]

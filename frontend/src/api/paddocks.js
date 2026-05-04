@@ -10,6 +10,7 @@ export const paddocksApi = {
   raceLeaderboard: (paddockId, raceId) => client.get(`/api/leaderboards/${paddockId}/racely/${raceId}/`),
   predictions: (paddockId) => client.get(`/api/paddocks/${paddockId}/predictions/`),
   myScores: () => client.get('/api/leaderboards/me/'),
+  leave: (paddockId) => client.post(`/api/paddocks/${paddockId}/leave/`),
   updateMemberRole: (paddockId, userId, role) =>
     client.patch(`/api/paddocks/${paddockId}/members/${userId}/`, { role }),
   removeMember: (paddockId, userId) =>

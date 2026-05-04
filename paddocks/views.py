@@ -110,6 +110,24 @@ def create_paddock(request):
     )
 
 
+@api_view(["POST"])
+def leave_paddock(request, pk):
+    try:
+        membership = PaddockMembership.objects.get(paddock_id=pk, user=request.user)
+    except PaddockMembership.DoesNotExist:
+        return Response({"detail": "Not a member."}, status=404)
+
+    if membership.role == "owner":
+        return Response({"detail": "Owners cannot leave. Transfer ownership or delete the paddock."}, status=400)
+
+    paddock = Paddock.objects.get(pk=pk)
+    if paddock.is_world_paddock:
+        return Response({"detail": "You cannot leave the World Paddock."}, status=400)
+
+    membership.delete()
+    return Response({"detail": "You have left the paddock."})
+
+
 @api_view(["GET"])
 def paddock_predictions(request, pk):
     """All members' Racely predictions for the current/latest locked race (deadline must have passed)."""

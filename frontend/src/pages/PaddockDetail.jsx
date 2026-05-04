@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { paddocksApi } from '../api/paddocks'
 import { f1Api } from '../api/f1'
@@ -7,7 +7,9 @@ import { f1Api } from '../api/f1'
 export default function PaddockDetail() {
   const { id } = useParams()
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [paddock, setPaddock] = useState(null)
+  const [leaving, setLeaving] = useState(false)
   const [leaderboard, setLeaderboard] = useState([])
   const [seasonLeaderboard, setSeasonLeaderboard] = useState([])
   const [races, setRaces] = useState([])
@@ -58,6 +60,29 @@ export default function PaddockDetail() {
           {paddock.member_count} member{paddock.member_count !== 1 ? 's' : ''} · Join code: <span className="font-mono">{paddock.join_code}</span>
         </p>
       </div>
+
+      {/* Leave button — non-owners, non-world paddocks only */}
+      {paddock.my_role !== 'owner' && !paddock.is_world_paddock && (
+        <div className="mb-4">
+          <button
+            disabled={leaving}
+            onClick={async () => {
+              if (!confirm(`Leave ${paddock.name}?`)) return
+              setLeaving(true)
+              try {
+                await paddocksApi.leave(id)
+                navigate('/my-paddocks')
+              } catch (err) {
+                alert(err.response?.data?.detail || 'Failed to leave.')
+                setLeaving(false)
+              }
+            }}
+            className="text-xs text-gray-600 hover:text-red-400 transition-colors disabled:opacity-40"
+          >
+            {leaving ? 'Leaving…' : 'Leave paddock'}
+          </button>
+        </div>
+      )}
 
       {/* Action links */}
       <div className="flex gap-3 mb-6">
