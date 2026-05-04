@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useEffect, useRef, useState } from 'react'
 import { authApi } from '../api/auth'
@@ -14,11 +14,18 @@ const navItems = [
 export default function Layout({ children }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
 
   const [notifications, setNotifications] = useState([])
   const [unread, setUnread] = useState(0)
-  const [open, setOpen] = useState(false)
+  const [bellOpen, setBellOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const bellRef = useRef(null)
+
+  // Close sidebar on route change (mobile)
+  useEffect(() => {
+    setSidebarOpen(false)
+  }, [location.pathname])
 
   useEffect(() => {
     authApi.getNotifications().then((r) => {
@@ -27,11 +34,10 @@ export default function Layout({ children }) {
     }).catch(() => {})
   }, [])
 
-  // Close dropdown on outside click
   useEffect(() => {
     function onClick(e) {
       if (bellRef.current && !bellRef.current.contains(e.target)) {
-        setOpen(false)
+        setBellOpen(false)
       }
     }
     document.addEventListener('mousedown', onClick)
@@ -39,13 +45,13 @@ export default function Layout({ children }) {
   }, [])
 
   function toggleBell() {
-    if (!open && unread > 0) {
+    if (!bellOpen && unread > 0) {
       authApi.markNotificationsRead().then(() => {
         setUnread(0)
         setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
       }).catch(() => {})
     }
-    setOpen((v) => !v)
+    setBellOpen((v) => !v)
   }
 
   const handleLogout = async () => {
@@ -55,8 +61,21 @@ export default function Layout({ children }) {
 
   return (
     <div className="flex min-h-screen">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-56 shrink-0 flex flex-col border-r border-white/10 bg-[#12121a]">
+      <aside className={`
+        fixed lg:static inset-y-0 left-0 z-40
+        w-56 shrink-0 flex flex-col border-r border-white/10 bg-[#12121a]
+        transition-transform duration-200
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
         {/* Logo + bell */}
         <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
           <span className="text-xl font-bold text-red-500 tracking-wide">Paddox</span>
@@ -76,12 +95,12 @@ export default function Layout({ children }) {
               )}
             </button>
 
-            {open && (
+            {bellOpen && (
               <div className="absolute left-0 top-8 w-72 bg-[#1e1e2e] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
                 <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
                   <span className="text-xs font-semibold text-gray-300 uppercase tracking-wide">Notifications</span>
                   <button
-                    onClick={() => setOpen(false)}
+                    onClick={() => setBellOpen(false)}
                     className="text-gray-500 hover:text-white text-xs"
                   >
                     ✕
@@ -146,10 +165,32 @@ export default function Layout({ children }) {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        {children}
-      </main>
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile topbar */}
+        <div className="lg:hidden flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-[#12121a] sticky top-0 z-20">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="text-gray-400 hover:text-white"
+            aria-label="Open menu"
+          >
+            <HamburgerIcon className="w-5 h-5" />
+          </button>
+          <span className="text-base font-bold text-red-500 tracking-wide">Paddox</span>
+        </div>
+
+        <main className="flex-1 overflow-auto">
+          {children}
+        </main>
+      </div>
     </div>
+  )
+}
+
+function HamburgerIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+    </svg>
   )
 }
 
