@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { paddocksApi } from '../api/paddocks'
+import { f1Api } from '../api/f1'
 
 export default function PaddockDetail() {
   const { id } = useParams()
@@ -9,6 +10,7 @@ export default function PaddockDetail() {
   const [paddock, setPaddock] = useState(null)
   const [leaderboard, setLeaderboard] = useState([])
   const [seasonLeaderboard, setSeasonLeaderboard] = useState([])
+  const [races, setRaces] = useState([])
   const [tab, setTab] = useState('leaderboard')
   const [loading, setLoading] = useState(true)
 
@@ -17,10 +19,12 @@ export default function PaddockDetail() {
       paddocksApi.detail(id),
       paddocksApi.leaderboard(id),
       paddocksApi.seasonLeaderboard(id),
-    ]).then(([pd, lb, slb]) => {
+      f1Api.races(),
+    ]).then(([pd, lb, slb, rc]) => {
       setPaddock(pd.data)
       setLeaderboard(lb.data.leaderboard || [])
       setSeasonLeaderboard(slb.data.leaderboard || [])
+      setRaces((rc.data || []).filter((r) => r.is_complete))
     }).finally(() => setLoading(false))
   }, [id])
 
@@ -85,7 +89,7 @@ export default function PaddockDetail() {
         ))}
       </div>
 
-      {tab === 'leaderboard' && <LeaderboardTab rows={leaderboard} />}
+      {tab === 'leaderboard' && <LeaderboardTab paddockId={id} rows={leaderboard} completedRaces={races} />}
       {tab === 'season' && <SeasonLeaderboardTab rows={seasonLeaderboard} />}
       {tab === 'members' && (
         <MembersTab
@@ -100,27 +104,71 @@ export default function PaddockDetail() {
   )
 }
 
-function LeaderboardTab({ rows }) {
-  if (rows.length === 0) {
-    return <p className="text-gray-500 text-sm">No scores yet — race results will appear here after scoring.</p>
-  }
+function LeaderboardTab({ paddockId, rows, completedRaces }) {
+  const [selectedRaceId, setSelectedRaceId] = useState(null)
+  const [raceRows, setRaceRows] = useState([])
+  const [raceLoading, setRaceLoading] = useState(false)
+
+  useEffect(() => {
+    if (!selectedRaceId) { setRaceRows([]); return }
+    setRaceLoading(true)
+    paddocksApi.raceLeaderboard(paddockId, selectedRaceId)
+      .then((r) => setRaceRows(r.data.leaderboard || []))
+      .catch(() => setRaceRows([]))
+      .finally(() => setRaceLoading(false))
+  }, [selectedRaceId, paddockId])
+
+  const displayRows = selectedRaceId ? raceRows : rows
+  const totalMode = !selectedRaceId
 
   return (
-    <div className="space-y-2">
-      {rows.map((row) => (
-        <div key={row.user.id} className="flex items-center gap-4 px-5 py-3 rounded-xl border border-white/8 bg-white/4">
-          <span className={`text-sm font-bold w-6 text-center ${row.rank === 1 ? 'text-yellow-400' : row.rank === 2 ? 'text-gray-300' : row.rank === 3 ? 'text-amber-600' : 'text-gray-600'}`}>
-            {row.rank}
-          </span>
-          <div className="flex-1">
-            <div className="text-sm font-medium text-white">{row.user.username}</div>
-            <div className="text-xs text-gray-500">
-              Pos {row.position_points}pt · Pole {row.pole_points}pt · FL {row.fastest_lap_points}pt · Quiz {row.quiz_points}pt
-            </div>
-          </div>
-          <span className="text-lg font-bold text-white">{row.total}</span>
+    <div className="space-y-4">
+      {/* Race selector */}
+      {completedRaces.length > 0 && (
+        <div className="flex items-center gap-3">
+          <select
+            value={selectedRaceId || ''}
+            onChange={(e) => setSelectedRaceId(e.target.value ? parseInt(e.target.value) : null)}
+            className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-red-500/50"
+          >
+            <option value="">Season total</option>
+            {completedRaces.map((r) => (
+              <option key={r.id} value={r.id}>R{r.round} — {r.name}</option>
+            ))}
+          </select>
+          {selectedRaceId && (
+            <button onClick={() => setSelectedRaceId(null)} className="text-xs text-gray-500 hover:text-gray-300">
+              ← Season total
+            </button>
+          )}
         </div>
-      ))}
+      )}
+
+      {raceLoading ? (
+        <div className="flex justify-center py-8">
+          <div className="w-5 h-5 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : displayRows.length === 0 ? (
+        <p className="text-gray-500 text-sm">No scores yet — race results will appear here after scoring.</p>
+      ) : (
+        <div className="space-y-2">
+          {displayRows.map((row) => (
+            <div key={row.user.id} className="flex items-center gap-4 px-5 py-3 rounded-xl border border-white/8 bg-white/4">
+              <span className={`text-sm font-bold w-6 text-center ${row.rank === 1 ? 'text-yellow-400' : row.rank === 2 ? 'text-gray-300' : row.rank === 3 ? 'text-amber-600' : 'text-gray-600'}`}>
+                {row.rank}
+              </span>
+              <div className="flex-1">
+                <div className="text-sm font-medium text-white">{row.user.username}</div>
+                <div className="text-xs text-gray-500">
+                  Pos {row.position_points}pt · Pole {row.pole_points}pt · FL {row.fastest_lap_points}pt
+                  {totalMode ? ` · Quiz ${row.quiz_points}pt` : row.quiz_pending ? ' · Quiz pending' : ` · Quiz ${row.quiz_points}pt`}
+                </div>
+              </div>
+              <span className="text-lg font-bold text-white">{row.total}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

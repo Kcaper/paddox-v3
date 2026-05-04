@@ -115,17 +115,22 @@ export default function Racely() {
     <div className="max-w-4xl mx-auto px-6 py-8">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center gap-3 mb-1">
+        <div className="flex items-center gap-3 mb-1 flex-wrap">
           <h2 className="text-2xl font-bold">Racely</h2>
           {locked && (
             <span className="text-xs bg-yellow-500/15 text-yellow-400 border border-yellow-500/20 rounded-full px-3 py-1">
               Deadline passed — view only
             </span>
           )}
+          {state.prediction?.is_rolled_over && (
+            <span className="text-xs bg-blue-500/15 text-blue-400 border border-blue-500/20 rounded-full px-3 py-1">
+              Rolled over from last race
+            </span>
+          )}
         </div>
         <p className="text-gray-500 text-sm">
           {race.name} · {race.circuit?.country}
-          {race.quali_at && (
+          {race.quali_at && !locked && (
             <> · Deadline: {new Date(race.quali_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}</>
           )}
         </p>
