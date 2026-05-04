@@ -16,7 +16,15 @@ def register(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     user = serializer.save()
     login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+    _auto_join_world_paddock(user)
     return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+
+
+def _auto_join_world_paddock(user):
+    from paddocks.models import Paddock, PaddockMembership
+    world = Paddock.objects.filter(is_world_paddock=True, is_active=True).first()
+    if world and not world.memberships.filter(user=user).exists():
+        PaddockMembership.objects.create(paddock=world, user=user, role="member")
 
 
 @api_view(["POST"])

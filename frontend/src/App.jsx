@@ -5,6 +5,8 @@ import Layout from './components/Layout'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
+import Racely from './pages/Racely'
+import MyPaddocks from './pages/MyPaddocks'
 
 function ComingSoon({ page }) {
   return (
@@ -39,13 +41,13 @@ function AppRoutes() {
             <Layout>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
-                <Route path="/racely" element={<ComingSoon page="Racely Predictions" />} />
+                <Route path="/racely" element={<Racely />} />
                 <Route path="/driver-predictions/:paddockId" element={<ComingSoon page="Driver Predictions" />} />
                 <Route path="/team-predictions/:paddockId" element={<ComingSoon page="Team Predictions" />} />
                 <Route path="/quiz" element={<ComingSoon page="Race Quiz" />} />
                 <Route path="/create-paddock" element={<ComingSoon page="Create Paddock" />} />
                 <Route path="/join-paddock" element={<ComingSoon page="Join Paddock" />} />
-                <Route path="/my-paddocks" element={<ComingSoon page="My Paddocks" />} />
+                <Route path="/my-paddocks" element={<MyPaddocks />} />
                 <Route path="/paddock/:id" element={<ComingSoon page="Paddock" />} />
                 <Route path="/leaderboard/:paddockId/:type" element={<ComingSoon page="Leaderboard" />} />
                 <Route path="/profile" element={<ComingSoon page="Profile" />} />
