@@ -110,6 +110,67 @@ def create_paddock(request):
     )
 
 
+@api_view(["GET"])
+def paddock_predictions(request, pk):
+    """All members' Racely predictions for the current/latest locked race (deadline must have passed)."""
+    try:
+        PaddockMembership.objects.get(paddock_id=pk, user=request.user)
+    except PaddockMembership.DoesNotExist:
+        return Response({"detail": "Not found."}, status=404)
+
+    from datetime import datetime, timezone as tz
+    from f1data.models import Race, Season
+    from predictions.models import RacelyPrediction, PolePrediction, FastestLapPrediction
+
+    now = datetime.now(tz.utc)
+    paddock = Paddock.objects.get(pk=pk)
+    season = paddock.season
+
+    # Find the most recent race whose qualifying deadline has passed
+    race = (
+        Race.objects.filter(season=season, quali_at__lte=now)
+        .order_by("-round")
+        .first()
+    )
+    if not race:
+        return Response({"race": None, "predictions": []})
+
+    members = list(paddock.memberships.select_related("user").order_by("joined_at"))
+
+    result = []
+    for membership in members:
+        user = membership.user
+        pred = (
+            RacelyPrediction.objects.filter(user=user, race=race)
+            .prefetch_related("entries__driver__constructor")
+            .first()
+        )
+        pole = PolePrediction.objects.filter(user=user, race=race).select_related("driver").first()
+        fl = FastestLapPrediction.objects.filter(user=user, race=race).select_related("driver").first()
+
+        result.append({
+            "user": {"id": user.id, "username": user.username, "avatar_url": user.avatar_url},
+            "is_rolled_over": pred.is_rolled_over if pred else None,
+            "entries": [
+                {"position": e.position, "driver": {
+                    "id": e.driver.id,
+                    "first_name": e.driver.first_name,
+                    "last_name": e.driver.last_name,
+                    "abbreviation": e.driver.abbreviation,
+                    "constructor": {"name": e.driver.constructor.name} if e.driver.constructor else None,
+                }}
+                for e in pred.entries.order_by("position")
+            ] if pred else [],
+            "pole": {"first_name": pole.driver.first_name, "last_name": pole.driver.last_name, "abbreviation": pole.driver.abbreviation} if pole else None,
+            "fastest_lap": {"first_name": fl.driver.first_name, "last_name": fl.driver.last_name, "abbreviation": fl.driver.abbreviation} if fl else None,
+        })
+
+    return Response({
+        "race": {"id": race.id, "name": race.name, "round": race.round},
+        "predictions": result,
+    })
+
+
 @api_view(["POST"])
 def join_paddock(request):
     code = (request.data.get("join_code") or "").strip().upper()

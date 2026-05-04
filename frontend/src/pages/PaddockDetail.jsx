@@ -11,6 +11,7 @@ export default function PaddockDetail() {
   const [leaderboard, setLeaderboard] = useState([])
   const [seasonLeaderboard, setSeasonLeaderboard] = useState([])
   const [races, setRaces] = useState([])
+  const [memberPicks, setMemberPicks] = useState(null)
   const [tab, setTab] = useState('leaderboard')
   const [loading, setLoading] = useState(true)
 
@@ -20,11 +21,13 @@ export default function PaddockDetail() {
       paddocksApi.leaderboard(id),
       paddocksApi.seasonLeaderboard(id),
       f1Api.races(),
-    ]).then(([pd, lb, slb, rc]) => {
+      paddocksApi.predictions(id),
+    ]).then(([pd, lb, slb, rc, picks]) => {
       setPaddock(pd.data)
       setLeaderboard(lb.data.leaderboard || [])
       setSeasonLeaderboard(slb.data.leaderboard || [])
       setRaces((rc.data || []).filter((r) => r.is_complete))
+      setMemberPicks(picks.data)
     }).finally(() => setLoading(false))
   }, [id])
 
@@ -74,7 +77,7 @@ export default function PaddockDetail() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-white/10 mb-6">
-        {[['leaderboard', 'Racely'], ['season', 'Season'], ['members', 'Members']].map(([key, label]) => (
+        {[['leaderboard', 'Racely'], ['season', 'Season'], ['picks', 'Picks'], ['members', 'Members']].map(([key, label]) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -91,6 +94,7 @@ export default function PaddockDetail() {
 
       {tab === 'leaderboard' && <LeaderboardTab paddockId={id} rows={leaderboard} completedRaces={races} />}
       {tab === 'season' && <SeasonLeaderboardTab rows={seasonLeaderboard} />}
+      {tab === 'picks' && <PicksTab data={memberPicks} />}
       {tab === 'members' && (
         <MembersTab
           paddockId={id}
@@ -169,6 +173,54 @@ function LeaderboardTab({ paddockId, rows, completedRaces }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function PicksTab({ data }) {
+  if (!data || !data.race) {
+    return <p className="text-gray-500 text-sm">No locked race yet — picks become visible after qualifying.</p>
+  }
+
+  const { race, predictions } = data
+
+  return (
+    <div className="space-y-6">
+      <p className="text-xs text-gray-500">
+        R{race.round} {race.name} — all members' Racely picks
+      </p>
+      {predictions.map((p) => (
+        <div key={p.user.id} className="bg-white/3 border border-white/8 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm font-semibold text-white">{p.user.username}</span>
+            {p.is_rolled_over && (
+              <span className="text-xs bg-blue-500/15 text-blue-400 border border-blue-500/20 rounded-full px-2 py-0.5">rolled over</span>
+            )}
+            {p.entries.length === 0 && (
+              <span className="text-xs text-gray-600">no prediction</span>
+            )}
+          </div>
+
+          {p.entries.length > 0 && (
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+              {p.entries.map((e) => (
+                <div key={e.position} className="flex items-center gap-2 text-xs">
+                  <span className="text-red-400 font-mono w-4 shrink-0">{e.position}</span>
+                  <span className="text-gray-300">{e.driver.last_name}</span>
+                  <span className="text-gray-600 text-[10px]">{e.driver.constructor?.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {(p.pole || p.fastest_lap) && (
+            <div className="flex gap-4 mt-3 pt-3 border-t border-white/5 text-xs text-gray-500">
+              {p.pole && <span>Pole: <span className="text-gray-300">{p.pole.last_name}</span></span>}
+              {p.fastest_lap && <span>FL: <span className="text-gray-300">{p.fastest_lap.last_name}</span></span>}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
