@@ -72,3 +72,17 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(
             f"Scored quiz for {race} — updated {updated} RacelyScore rows"
         ))
+
+        # Notify all paddock members
+        from django.contrib.auth import get_user_model
+        from users.notify import notify_many
+        User = get_user_model()
+        all_users = list(User.objects.filter(
+            paddock_memberships__paddock__season=race.season
+        ).distinct())
+        notify_many(
+            all_users,
+            f"{race.name} — Quiz answers confirmed!",
+            body="Check the quiz to see how you scored.",
+            type="quiz_confirmed",
+        )

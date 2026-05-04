@@ -84,4 +84,13 @@ def join_paddock(request):
         return Response({"detail": "Paddock is full."}, status=400)
 
     PaddockMembership.objects.create(paddock=paddock, user=request.user, role="member")
+
+    # Notify owner/admins
+    from users.notify import notify_many
+    admins = [
+        m.user for m in paddock.memberships.filter(role__in=("owner", "admin")).select_related("user")
+        if m.user != request.user
+    ]
+    notify_many(admins, f"{request.user.username} joined {paddock.name}", type="paddock_joined")
+
     return Response(PaddockDetailSerializer(paddock, context={"request": request}).data)

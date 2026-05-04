@@ -176,19 +176,9 @@ def season_prediction(request, paddock_id):
     paddock = membership.paddock
     season = paddock.season
 
-    # All on-grid drivers/constructors (or paddock pool)
-    pool_driver_ids = list(PaddockPool.objects.filter(paddock=paddock, driver__isnull=False).values_list("driver_id", flat=True))
-    pool_ctor_ids = list(PaddockPool.objects.filter(paddock=paddock, constructor__isnull=False).values_list("constructor_id", flat=True))
-
-    if pool_driver_ids:
-        available_drivers = Driver.objects.filter(id__in=pool_driver_ids, is_on_grid=True).select_related("constructor")
-    else:
-        available_drivers = Driver.objects.filter(is_on_grid=True).select_related("constructor")
-
-    if pool_ctor_ids:
-        available_ctors = Constructor.objects.filter(id__in=pool_ctor_ids, is_on_grid=True)
-    else:
-        available_ctors = Constructor.objects.filter(is_on_grid=True)
+    # Season predictions always include ALL drivers/constructors — pool filtering only affects Racely
+    available_drivers = Driver.objects.filter(is_on_grid=True).select_related("constructor")
+    available_ctors = Constructor.objects.filter(is_on_grid=True)
 
     driver_pred = DriverStandingPrediction.objects.filter(
         user=request.user, paddock=paddock

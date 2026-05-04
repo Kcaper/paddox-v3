@@ -1,5 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useEffect, useRef, useState } from 'react'
+import { authApi } from '../api/auth'
 
 const navItems = [
   { to: '/', label: 'Calendar', icon: CalendarIcon, exact: true },
@@ -13,6 +15,39 @@ export default function Layout({ children }) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
+  const [notifications, setNotifications] = useState([])
+  const [unread, setUnread] = useState(0)
+  const [open, setOpen] = useState(false)
+  const bellRef = useRef(null)
+
+  useEffect(() => {
+    authApi.getNotifications().then((r) => {
+      setNotifications(r.data.notifications)
+      setUnread(r.data.unread)
+    }).catch(() => {})
+  }, [])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function onClick(e) {
+      if (bellRef.current && !bellRef.current.contains(e.target)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
+
+  function toggleBell() {
+    if (!open && unread > 0) {
+      authApi.markNotificationsRead().then(() => {
+        setUnread(0)
+        setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
+      }).catch(() => {})
+    }
+    setOpen((v) => !v)
+  }
+
   const handleLogout = async () => {
     await logout()
     navigate('/login')
@@ -22,9 +57,59 @@ export default function Layout({ children }) {
     <div className="flex min-h-screen">
       {/* Sidebar */}
       <aside className="w-56 shrink-0 flex flex-col border-r border-white/10 bg-[#12121a]">
-        {/* Logo */}
-        <div className="px-6 py-5 border-b border-white/10">
+        {/* Logo + bell */}
+        <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
           <span className="text-xl font-bold text-red-500 tracking-wide">Paddox</span>
+
+          {/* Notification bell */}
+          <div ref={bellRef} className="relative">
+            <button
+              onClick={toggleBell}
+              className="relative text-gray-400 hover:text-white transition-colors"
+              aria-label="Notifications"
+            >
+              <BellIcon className="w-5 h-5" />
+              {unread > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {unread > 9 ? '9+' : unread}
+                </span>
+              )}
+            </button>
+
+            {open && (
+              <div className="absolute left-0 top-8 w-72 bg-[#1e1e2e] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
+                <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-300 uppercase tracking-wide">Notifications</span>
+                  <button
+                    onClick={() => setOpen(false)}
+                    className="text-gray-500 hover:text-white text-xs"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="max-h-80 overflow-y-auto divide-y divide-white/5">
+                  {notifications.length === 0 ? (
+                    <p className="px-4 py-6 text-center text-sm text-gray-500">No notifications yet</p>
+                  ) : (
+                    notifications.map((n) => (
+                      <div
+                        key={n.id}
+                        className={`px-4 py-3 ${n.is_read ? '' : 'bg-white/5'}`}
+                      >
+                        <p className="text-sm text-white font-medium">{n.title}</p>
+                        {n.body && <p className="text-xs text-gray-400 mt-0.5">{n.body}</p>}
+                        <p className="text-[10px] text-gray-600 mt-1">
+                          {new Date(n.created_at).toLocaleDateString(undefined, {
+                            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                          })}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Nav */}
@@ -65,6 +150,14 @@ export default function Layout({ children }) {
         {children}
       </main>
     </div>
+  )
+}
+
+function BellIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+    </svg>
   )
 }
 

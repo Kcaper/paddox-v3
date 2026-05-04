@@ -24,11 +24,29 @@ class QuizQuestionAdmin(admin.ModelAdmin):
     question_text_short.short_description = "Question"
 
     def save_model(self, request, obj, form, change):
+        was_live = change and QuizQuestion.objects.filter(pk=obj.pk, is_live=False).exists()
+
         if "correct_option" in form.changed_data and obj.correct_option:
             obj.answers_confirmed = True
             obj.confirmed_by = request.user
             obj.confirmed_at = timezone.now()
+
         super().save_model(request, obj, form, change)
+
+        # Notify when question first goes live
+        if was_live and obj.is_live:
+            from django.contrib.auth import get_user_model
+            from users.notify import notify_many
+            User = get_user_model()
+            users = list(User.objects.filter(
+                paddock_memberships__paddock__season=obj.race.season
+            ).distinct())
+            notify_many(
+                users,
+                f"{obj.race.name} quiz questions are live!",
+                body=f"Answer the {obj.get_batch_display()} questions before the deadline.",
+                type="quiz_live",
+            )
 
 
 @admin.register(QuizAnswer)

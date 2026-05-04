@@ -7,4 +7,7 @@ urlpatterns = [
     path("logout/", views.logout_view),
     path("me/", views.me),
     path("me/update/", views.update_profile),
+    path("me/password/", views.change_password),
+    path("notifications/", views.notifications),
+    path("notifications/read/", views.mark_notifications_read),
 ]

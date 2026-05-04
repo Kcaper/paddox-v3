@@ -89,6 +89,18 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"Scored {scored} user-paddock combinations"))
 
+        # Notify all scored users
+        from users.notify import notify_many
+        scored_users = list(User.objects.filter(
+            racely_scores__race=race
+        ).distinct())
+        notify_many(
+            scored_users,
+            f"{race.name} — Racely scores updated",
+            body="Check your paddock leaderboard to see how you did.",
+            type="race_scored",
+        )
+
 
 def _get_or_rollover(user, race):
     """Return the prediction for this race, rolling over from the previous if missing."""

@@ -15,4 +15,13 @@ export const authApi = {
 
   updateProfile: (data) =>
     client.patch('/api/users/me/update/', data),
+
+  changePassword: (current_password, new_password) =>
+    client.post('/api/users/me/password/', { current_password, new_password }),
+
+  getNotifications: () =>
+    client.get('/api/users/notifications/'),
+
+  markNotificationsRead: () =>
+    client.post('/api/users/notifications/read/'),
 }
