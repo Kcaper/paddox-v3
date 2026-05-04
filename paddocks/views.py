@@ -2,9 +2,12 @@ from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
+from django.contrib.auth import get_user_model
 from f1data.models import Season
 from .models import Paddock, PaddockMembership, PaddockRules
 from .serializers import CreatePaddockSerializer, PaddockDetailSerializer, PaddockListSerializer
+
+User = get_user_model()
 
 
 @api_view(["GET"])
@@ -21,7 +24,48 @@ def paddock_detail(request, pk):
     except PaddockMembership.DoesNotExist:
         return Response({"detail": "Not found."}, status=404)
     paddock = membership.paddock
-    paddock.memberships  # already prefetched via select_related won't work here, but fine for detail
+    return Response(PaddockDetailSerializer(paddock, context={"request": request}).data)
+
+
+@api_view(["PATCH", "DELETE"])
+def manage_member(request, pk, user_id):
+    """Owner/admin can change roles or remove members."""
+    try:
+        my_membership = request.user.paddock_memberships.get(paddock_id=pk)
+    except PaddockMembership.DoesNotExist:
+        return Response({"detail": "Not found."}, status=404)
+
+    if my_membership.role not in ("owner", "admin"):
+        return Response({"detail": "Permission denied."}, status=403)
+
+    if user_id == request.user.id:
+        return Response({"detail": "Cannot modify your own membership this way."}, status=400)
+
+    try:
+        target = PaddockMembership.objects.get(paddock_id=pk, user_id=user_id)
+    except PaddockMembership.DoesNotExist:
+        return Response({"detail": "Member not found."}, status=404)
+
+    if target.role == "owner":
+        return Response({"detail": "Cannot modify the owner."}, status=400)
+
+    paddock = Paddock.objects.get(pk=pk)
+
+    if request.method == "DELETE":
+        if my_membership.role == "admin" and target.role == "admin":
+            return Response({"detail": "Admins cannot remove other admins."}, status=403)
+        target.delete()
+        return Response(PaddockDetailSerializer(paddock, context={"request": request}).data)
+
+    new_role = request.data.get("role")
+    if new_role not in ("admin", "member"):
+        return Response({"detail": "role must be 'admin' or 'member'."}, status=400)
+
+    if my_membership.role == "admin" and new_role == "admin":
+        return Response({"detail": "Admins cannot promote others to admin."}, status=403)
+
+    target.role = new_role
+    target.save(update_fields=["role"])
     return Response(PaddockDetailSerializer(paddock, context={"request": request}).data)
 
 

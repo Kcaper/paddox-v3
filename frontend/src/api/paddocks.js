@@ -6,4 +6,8 @@ export const paddocksApi = {
   create: (data) => client.post('/api/paddocks/create/', data),
   join: (join_code) => client.post('/api/paddocks/join/', { join_code }),
   leaderboard: (paddockId) => client.get(`/api/leaderboards/${paddockId}/racely/`),
+  updateMemberRole: (paddockId, userId, role) =>
+    client.patch(`/api/paddocks/${paddockId}/members/${userId}/`, { role }),
+  removeMember: (paddockId, userId) =>
+    client.delete(`/api/paddocks/${paddockId}/members/${userId}/`),
 }
