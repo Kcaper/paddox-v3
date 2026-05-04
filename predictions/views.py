@@ -221,6 +221,10 @@ def submit_driver_standing(request, paddock_id):
     if not driver_ids:
         return Response({"detail": "driver_ids is required."}, status=400)
 
+    existing = DriverStandingPrediction.objects.filter(user=request.user, paddock=paddock).first()
+    if existing and existing.is_locked:
+        return Response({"detail": "Your prediction has been locked by an admin."}, status=400)
+
     pred, _ = DriverStandingPrediction.objects.update_or_create(
         user=request.user, paddock=paddock, defaults={}
     )
@@ -246,6 +250,10 @@ def submit_constructor_standing(request, paddock_id):
     ctor_ids = request.data.get("constructor_ids", [])
     if not ctor_ids:
         return Response({"detail": "constructor_ids is required."}, status=400)
+
+    existing = ConstructorStandingPrediction.objects.filter(user=request.user, paddock=paddock).first()
+    if existing and existing.is_locked:
+        return Response({"detail": "Your prediction has been locked by an admin."}, status=400)
 
     pred, _ = ConstructorStandingPrediction.objects.update_or_create(
         user=request.user, paddock=paddock, defaults={}
